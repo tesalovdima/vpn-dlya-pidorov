@@ -9,6 +9,24 @@
 
 ---
 
+## 0. Скачать архивом
+
+Один zip — в нём и сервер, и клиент, и документация:
+
+| Что | Ссылка |
+|---|---|
+| Последний релиз | https://github.com/tesalovdima/vpn-dlya-pidorov/releases/latest |
+| Архив тега v1.0.0 | https://github.com/tesalovdima/vpn-dlya-pidorov/archive/refs/tags/v1.0.0.zip |
+| Весь репозиторий zip | https://github.com/tesalovdima/vpn-dlya-pidorov/archive/refs/heads/main.zip |
+
+Распаковать и запустить `client\install-client-vpn.bat` (двойной клик) —
+он сам создаст VPN-подключение в Windows.
+
+> В архиве **нет** никаких паролей и ключей: логин/пароль/PSK выдаёт тот,
+> кто ставит сервер (скрипт печатает их в конце установки).
+
+---
+
 ## 1. Быстрый старт
 
 ### Шаг 1 — сервер (Ubuntu/Debian, root)

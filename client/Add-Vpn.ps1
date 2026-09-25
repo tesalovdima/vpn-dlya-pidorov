@@ -47,6 +47,83 @@ function Test-Admin {
     ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+# --- сохранение логина/пароля прямо в RAS (то же, что галочка "Сохранить данные")
+#     Нужно, чтобы при включении VPN в Windows ничего не спрашивалось.
+if (-not ('RasCred' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class RasCred
+{
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct RASCREDENTIALS
+    {
+        public int dwSize;
+        public int dwMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 257)] public string szUserName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 257)] public string szPassword;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 16)] public string szDomain;
+    }
+
+    [DllImport("rasapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int RasSetCredentials(string phonebook, string entry, ref RASCREDENTIALS creds, bool clear);
+
+    [DllImport("rasapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int RasGetCredentials(string phonebook, string entry, ref RASCREDENTIALS creds);
+
+    public static int Set(string phonebook, string entry, string user, string pass)
+    {
+        RASCREDENTIALS c = new RASCREDENTIALS();
+        c.dwSize = Marshal.SizeOf(typeof(RASCREDENTIALS));
+        c.dwMask = 7;
+        c.szUserName = user;
+        c.szPassword = pass;
+        c.szDomain = "";
+        return RasSetCredentials(phonebook, entry, ref c, false);
+    }
+
+    public static string GetRaw(string phonebook, string entry)
+    {
+        RASCREDENTIALS c = new RASCREDENTIALS();
+        c.dwSize = Marshal.SizeOf(typeof(RASCREDENTIALS));
+        c.dwMask = 7;
+        c.szUserName = "";
+        c.szPassword = "";
+        c.szDomain = "";
+        int rc = RasGetCredentials(phonebook, entry, ref c);
+        return rc + "|" + c.szUserName + "|" + c.szPassword;
+    }
+}
+'@
+}
+
+function Get-RasPhonebook {
+    Join-Path $env:APPDATA 'Microsoft\Network\Connections\Pbk\rasphone.pbk'
+}
+
+function Save-VpnCredentials {
+    param([string]$ConnName, [string]$UserName, [string]$Pass)
+    $pbk = Get-RasPhonebook
+    if (-not (Test-Path $pbk)) { return $false }
+    try {
+        if ([RasCred]::Set($pbk, $ConnName, $UserName, $Pass) -ne 0) { return $false }
+        return (([RasCred]::GetRaw($pbk, $ConnName) -split '\|')[0] -eq '0')
+    } catch { return $false }
+}
+
+function Get-SavedCredentials {
+    param([string]$ConnName)
+    $pbk = Get-RasPhonebook
+    if (-not (Test-Path $pbk)) { return $null }
+    try {
+        $p = [RasCred]::GetRaw($pbk, $ConnName) -split '\|'
+        if ($p[0] -eq '0' -and $p[1] -and $p[2]) {
+            return [pscustomobject]@{ User = $p[1]; Pass = $p[2] }
+        }
+        return $null
+    } catch { return $null }
+}
+
 if (-not (Test-Admin)) {
     Bad 'Нужны права администратора — перезапустите PowerShell от имени администратора'
     exit 1
@@ -107,6 +184,14 @@ if ($Server) {
         -AuthenticationMethod MSChapv2 -EncryptionLevel Required -RememberCredential -Force | Out-Null
     Set-VpnConnection -Name $Name -SplitTunneling $false -Force
     Good "Подключение '$Name' добавлено в Windows (Параметры → Сеть и Интернет → VPN)"
+
+    # сохраняем логин/пароль: при включении VPN Windows не будет их спрашивать
+    Say 'Сохраняю логин и пароль для подключения...'
+    if (Save-VpnCredentials -ConnName $Name -UserName $User -Pass $Password) {
+        Good 'Логин и пароль сохранены — при включении VPN вводить их не нужно'
+    } else {
+        Warn2 'Пароль сохранить не удалось: Windows спросит его при первом включении'
+    }
 } elseif (-not $Connect -and -not $Test) {
     Bad 'Укажите: -Server <IP> -User <логин> -Password <пароль> -Psk <ключ IPsec>'
     exit 1
@@ -118,13 +203,21 @@ if ($Server) {
 # ---------------------------------------------------------------- connect + test
 if ($Connect -or $Test) {
     Say 'Подключаюсь...'
+    if (-not $User -or -not $Password) {
+        $saved = Get-SavedCredentials -ConnName $Name
+        if ($saved) {
+            $User = $saved.User
+            $Password = $saved.Pass
+            Good 'Беру сохранённые логин и пароль'
+        }
+    }
     if ($User -and $Password) {
         $r = rasdial "$Name" $User $Password 2>&1 | Out-String
     } else {
         $r = rasdial "$Name" 2>&1 | Out-String
     }
     if ($LASTEXITCODE -ne 0) {
-        Warn2 'Сохранённые данные не подошли — введите логин и пароль.'
+        Warn2 'Подключиться не удалось — введите логин и пароль.'
         $User = Read-Host 'Логин'
         $Password = Read-Host 'Пароль'
         $r = rasdial "$Name" $User $Password 2>&1 | Out-String

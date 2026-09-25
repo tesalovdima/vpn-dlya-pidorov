@@ -15,15 +15,19 @@
 
 | Что | Ссылка |
 |---|---|
-| Последний релиз | https://github.com/tesalovdima/vpn-dlya-pidorov/releases/latest |
-| Архив тега v1.0.0 | https://github.com/tesalovdima/vpn-dlya-pidorov/archive/refs/tags/v1.0.0.zip |
-| Весь репозиторий zip | https://github.com/tesalovdima/vpn-dlya-pidorov/archive/refs/heads/main.zip |
+| **Архив версии v1.0.1** (рекомендуется) | https://github.com/tesalovdima/vpn-dlya-pidorov/archive/refs/tags/v1.0.1.zip |
+| Архив актуальной ветки main | https://github.com/tesalovdima/vpn-dlya-pidorov/archive/refs/heads/main.zip |
+| Репозиторий | https://github.com/tesalovdima/vpn-dlya-pidorov |
 
 Распаковать и запустить `client\install-client-vpn.bat` (двойной клик) —
 он сам создаст VPN-подключение в Windows.
 
 > В архиве **нет** никаких паролей и ключей: логин/пароль/PSK выдаёт тот,
 > кто ставит сервер (скрипт печатает их в конце установки).
+
+> Если Windows ругается, что файл «из интернета», или скрипт не запускается —
+> в свойствах файла нажать «Разблокировать», либо один раз в PowerShell:
+> `Get-ChildItem client\* | Unblock-File`
 
 ---
 

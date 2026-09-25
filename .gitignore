@@ -1,0 +1,30 @@
+# временные/рабочие файлы
+.tmp*
+*.tmp
+
+# секреты (никогда не коммитим)
+vpn-info.txt
+*.vless-link
+*.ss-link
+.vless-link
+.ss-link
+client/.vless-link
+client/.ss-link
+
+# логи и бэкапы
+*.log
+*.bak
+*.old
+
+# бинарники/архивы
+*.zip
+*.exe
+*.dll
+*.tar.gz
+temp/
+
+# системное
+Thumbs.db
+.DS_Store
+cache.db
+.vscode/

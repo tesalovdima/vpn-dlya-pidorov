@@ -84,7 +84,7 @@ conn %default
     ikelifetime=8h
     keylife=1h
     rekey=no
-    pfs=no
+    # pfs не указываем: PFS выключен, поскольку в esp нет DH-группы
     mobike=no
 
 conn L2TP-PSK
@@ -155,7 +155,10 @@ net.ipv4.ip_no_pmtu_disc = 0
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 EOF
-sysctl -q -p /etc/sysctl.d/99-l2tp-vpn.conf
+# BBR — это модуль ядра. Если его нет (например, установлено другое ядро),
+# sysctl вернёт ошибку; это не критично, ядро останется на cubic.
+modprobe tcp_bbr 2>/dev/null || true
+sysctl -q -p /etc/sysctl.d/99-l2tp-vpn.conf 2>/dev/null || warn 'часть параметров ядра недоступна — не критично'
 ok "IP forwarding + BBR включены"
 
 # ---------------------------------------------------------------- firewall
@@ -209,9 +212,14 @@ systemctl restart strongswan-starter 2>/dev/null || systemctl restart strongswan
 systemctl restart xl2tpd
 sleep 3
 
-IPSW="$(systemctl is-active strongswan-starter 2>/dev/null || systemctl is-active strongswan)"
-XL2="$(systemctl is-active xl2tpd)"
-[[ "$IPSW" == "active" && "$XL2" == "active" ]] || die "Службы не запустились: strongswan=$IPSW xl2tpd=$XL2"
+# strongswan-starter на Ubuntu — oneshot-служба: она остаётся "inactive",
+# хотя charon (сам IPsec-демон) работает. Проверяем именно charon.
+ipsec start >/dev/null 2>&1 || true
+sleep 2
+XL2="$(systemctl is-active xl2tpd || true)"
+ipsec status >/dev/null 2>&1 || die "IPsec (charon) не запустился"
+[[ "$XL2" == "active" ]] || die "xl2tpd не запустился: $XL2"
+ok "IPsec (charon) и xl2tpd работают"
 
 cat > /root/vpn-info.txt <<EOF
 # ===== L2TP/IPsec VPN =====
@@ -235,3 +243,10 @@ echo "Windows (от администратора):"
 echo "  powershell -ExecutionPolicy Bypass -File client\\Add-Vpn.ps1 -Server ${PUB_IP} -User ${VPN_USER} -Password ${VPN_PASS} -Psk ${PSK}"
 echo
 echo "Все данные сохранены в /root/vpn-info.txt"
+
+# машиночитаемый вывод — его разбирает deploy.ps1
+echo "server=${PUB_IP}"
+echo "login=${VPN_USER}"
+echo "password=${VPN_PASS}"
+echo "psk=${PSK}"
+echo "mtu=${MTU}"

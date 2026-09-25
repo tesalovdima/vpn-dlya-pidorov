@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Добавляет VPN в стандартные подключения Windows (Панель управления →
     Сеть → VPN). Дальше включается/отключается в один клик — в Параметрах,
@@ -86,31 +86,49 @@ if ($Remove) {
 }
 
 # ---------------------------------------------------------------- create
-if (-not $Server -or -not $User -or -not $Password -or -not $Psk) {
+if ($Server) {
+    if (-not $User -or -not $Password -or -not $Psk) {
+        Bad 'Укажите: -Server <IP> -User <логин> -Password <пароль> -Psk <ключ IPsec>'
+        exit 1
+    }
+
+    # правка реестра: работа L2TP/IPsec за NAT (домашний роутер)
+    Say 'Настраиваю работу L2TP/IPsec за NAT...'
+    New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\PolicyAgent' -Name 'AssumeUDPEncapsulationContextOnSendRule' `
+        -Value 2 -PropertyType DWord -Force | Out-Null
+    Restart-Service PolicyAgent -Force -ErrorAction SilentlyContinue
+    Restart-Service IKEEXT -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    Good 'NAT-фикс применён'
+
+    Say "Создаю подключение '$Name'..."
+    Remove-VpnConnection -Name $Name -Force -ErrorAction SilentlyContinue
+    Add-VpnConnection -Name $Name -ServerAddress $Server -TunnelType L2tp -L2tpPsk $Psk `
+        -AuthenticationMethod MSChapv2 -EncryptionLevel Required -RememberCredential -Force | Out-Null
+    Set-VpnConnection -Name $Name -SplitTunneling $false -Force
+    Good "Подключение '$Name' добавлено в Windows (Параметры → Сеть и Интернет → VPN)"
+} elseif (-not $Connect -and -not $Test) {
     Bad 'Укажите: -Server <IP> -User <логин> -Password <пароль> -Psk <ключ IPsec>'
     exit 1
+} elseif (-not (Get-VpnConnection -Name $Name -ErrorAction SilentlyContinue)) {
+    Bad "Подключение '$Name' не найдено — сначала создайте его (параметр -Server)"
+    exit 1
 }
-
-# правка реестра: работа L2TP/IPsec за NAT (домашний роутер)
-Say 'Настраиваю работу L2TP/IPsec за NAT...'
-New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\PolicyAgent' -Name 'AssumeUDPEncapsulationContextOnSendRule' `
-    -Value 2 -PropertyType DWord -Force | Out-Null
-Restart-Service PolicyAgent -Force -ErrorAction SilentlyContinue
-Restart-Service IKEEXT -Force -ErrorAction SilentlyContinue
-Start-Sleep -Seconds 2
-Good 'NAT-фикс применён'
-
-Say "Создаю подключение '$Name'..."
-Remove-VpnConnection -Name $Name -Force -ErrorAction SilentlyContinue
-Add-VpnConnection -Name $Name -ServerAddress $Server -TunnelType L2tp -L2tpPsk $Psk `
-    -AuthenticationMethod MSChapv2 -EncryptionLevel Required -RememberCredential -Force | Out-Null
-Set-VpnConnection -Name $Name -SplitTunneling $false -Force
-Good "Подключение '$Name' добавлено в Windows (Параметры → Сеть и Интернет → VPN)"
 
 # ---------------------------------------------------------------- connect + test
 if ($Connect -or $Test) {
     Say 'Подключаюсь...'
-    $r = rasdial "$Name" $User $Password 2>&1 | Out-String
+    if ($User -and $Password) {
+        $r = rasdial "$Name" $User $Password 2>&1 | Out-String
+    } else {
+        $r = rasdial "$Name" 2>&1 | Out-String
+    }
+    if ($LASTEXITCODE -ne 0) {
+        Warn2 'Сохранённые данные не подошли — введите логин и пароль.'
+        $User = Read-Host 'Логин'
+        $Password = Read-Host 'Пароль'
+        $r = rasdial "$Name" $User $Password 2>&1 | Out-String
+    }
     Write-Host $r.Trim()
     Start-Sleep -Seconds 6
 

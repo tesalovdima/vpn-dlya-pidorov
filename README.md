@@ -21,7 +21,24 @@ curl -fsSL https://raw.githubusercontent.com/tesalovdima/vpn-dlya-pidorov/main/s
 Он сам: ставит strongSwan + xl2tpd, включает IP-форвардинг, NAT, MSS-clamping
 (без него не грузятся «тяжёлые» сайты), открывает порты и запускает службы.
 
-### Шаг 2 — Windows (PowerShell **от администратора**)
+### Шаг 2 — Windows
+
+**Самый простой способ — батник** (двойной клик, дальше всё сам):
+
+```
+client\install-client.bat
+```
+
+Он запросит IP сервера, логин, пароль и PSK, сам попросит права
+администратора (UAC), создаст подключение и предложит сразу проверить связь.
+
+То же самое без вопросов, одной строкой (cmd **от администратора**):
+
+```bat
+client\install-client.bat 1.2.3.4 vpnuser ПАРОЛЬ PSK
+```
+
+**Через PowerShell** (альтернатива):
 
 ```powershell
 git clone git@github.com:tesalovdima/vpn-dlya-pidorov.git
@@ -45,6 +62,7 @@ rasdial "MyVPN" /disconnect            # отключить
 ```
 server/install-vpn.sh       # VPN-сервер L2TP/IPsec одной командой (+ --uninstall)
 server/install-singbox.sh   # альтернатива: VLESS + TLS (sing-box), если L2TP заблокируют
+client/install-client.bat   # установщик для Windows: двойной клик и готово
 client/Add-Vpn.ps1          # добавляет VPN в стандартные подключения Windows
 client/setup-windows.ps1    # альтернативный клиент (sing-box, SOCKS/TUN)
 deploy.ps1                  # развёртывание сервера прямо из Windows по SSH
@@ -72,6 +90,15 @@ powershell -ExecutionPolicy Bypass -File client\Add-Vpn.ps1 -Name MyVPN -User vp
 
 # удалить подключение из Windows
 powershell -ExecutionPolicy Bypass -File client\Add-Vpn.ps1 -Name MyVPN -Remove
+```
+
+То же самое батником (удобнее — просто двойной клик):
+
+```bat
+client\install-client.bat status        :: состояние и внешний IP
+client\install-client.bat disconnect    :: отключить
+client\install-client.bat remove        :: удалить подключение
+client\install-client.bat test 1.2.3.4 vpnuser ПАРОЛЬ PSK   :: подключить, проверить, отключить
 ```
 
 Либо просто через интерфейс: **Параметры → Сеть и Интернет → VPN → MyVPN → Подключить**.
